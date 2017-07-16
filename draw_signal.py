@@ -38,7 +38,10 @@ def draw_vec(s, sig, rng, totl, vscale, hscale, name, labels):
 			fine = totl
 		center = (fine - point[0]) * hscale / 2
 		#add text with signal value
-		value_txt = "".join([point[1][x] for x in rng])
+		if rng != []:
+			value_txt = "".join([point[1][x] for x in rng])
+		else:
+			value_txt = str(point[1])
 		txt = s.text(value_txt, (point[0] * hscale + center, vscale/2 + font_size*.4), font_family="Roboto", font_size= font_size, text_anchor = "middle")
 		txtg.add(txt)
 		oldtime = point[0] * hscale

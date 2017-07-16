@@ -10,8 +10,11 @@ Signal can be "all", "top" or multiple names of signals.
 """
 
 import sys
+import os
 from docopt import docopt
 import svgwrite
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(dir_path + "/Verilog_VCD/")
 from Verilog_VCD import Verilog_VCD
 
 import draw_signal
@@ -47,11 +50,14 @@ found_signals = []
 found_signals_ugly = []
 found_signals_basenames = []
 found_signals_tv = []
+found_signals_type = []
 for x in data:
 	try:
 		found_signals_tv.append(data[x]['tv'])
 		sig_name = data[x]['nets'][0]['name']
 		found_signals.append(sig_name)
+		sig_type = data[x]['nets'][0]['type']
+		found_signals_type.append(sig_type)
 		sig_ugly = data[x]['nets'][0]['hier'] + "." + sig_name
 		if sig_ugly[0] != ".":
 			sig_ugly = "." + sig_ugly
@@ -74,49 +80,62 @@ for c in signals: #segnali richiesti
 	try:
 		sig_index = found_signals_basenames.index(c_bname)
 	except ValueError:
-		print("not found: " + c_bname + " in " + str(found_signals_basenames))
+		print("not found or empty: " + c_bname)
 		continue
 	sig_ugly = found_signals_ugly[sig_index]
+	sig_type = found_signals_type[sig_index]
+	if sig_type == "reg":
+		try:
+			#default: use all indexes in signal
+			indexes = list(map(int, sig_ugly.split("[")[1][:-1].split(":")))
+			if indexes[0] > indexes[1]:
+				reverse = True
+		except IndexError:
+			#single signal
+			indexes = [0]
+		size = max(indexes) + 1
+		if len(c_parts) > 1:
+			#read requested signals
+			indexes = map(int, c_parts[1][:-1].split(":"))
+			indexes = list(indexes)
+		elif len(indexes) > 1: 
+			c += "["+ ":".join(map(str,indexes)) +"]"
 	
-	try:
-		#default: use all indexes in signal
-		indexes = list(map(int, sig_ugly.split("[")[1][:-1].split(":")))
-		if indexes[0] > indexes[1]:
-			reverse = True
-	except IndexError:
-		#single signal
-		indexes = [0]
-	size = max(indexes) + 1
-	if len(c_parts) > 1:
-		#read requested signals
-		indexes = map(int, c_parts[1][:-1].split(":"))
-		indexes = list(indexes)
-	elif len(indexes) > 1: 
-		c += "["+ ":".join(map(str,indexes)) +"]"
-	
-	if len(indexes) > 1:
-		direction = +1 if indexes[0] < indexes[1] else -1
-		rng = list(range(indexes[0], indexes[1]+direction, direction))
-	else:
-		rng = indexes
-	if reverse:
-		rng = [size-x-1 for x in rng]
-	print("drawing signal: " + c + ", with indexes "+ str(rng) )
-	try:
-		sig = found_signals_tv[sig_index] 
-	except KeyError:
-		print(" -> skipping empty signal: " + c)
-	else:
-		if len(rng) == 1:
-			group = draw_signal.draw_bin_signal(s, sig, rng[0], end_time,
-			                                    vscale, hscale, c,
-			                                    labels)
+		if len(indexes) > 1:
+			direction = +1 if indexes[0] < indexes[1] else -1
+			rng = list(range(indexes[0], indexes[1]+direction, direction))
 		else:
-			group = draw_signal.draw_vec(s, sig, rng, end_time, vscale,
-			                             hscale, c, labels)
-		group.translate(0, v)
-		v += vscale + padding
-		allg.add(group)
+			rng = indexes
+		if reverse:
+			rng = [size-x-1 for x in rng]
+		print("drawing signal: " + c + ", with indexes "+ str(rng) )
+		try:
+			sig = found_signals_tv[sig_index] 
+		except KeyError:
+			print(" -> skipping empty signal: " + c)
+		else:
+			if len(rng) == 1:
+				group = draw_signal.draw_bin_signal(s, sig, rng[0], end_time,
+					                                vscale, hscale, c,
+					                                labels)
+			else:
+				group = draw_signal.draw_vec(s, sig, rng, end_time, vscale,
+					                         hscale, c, labels)
+
+	elif sig_type in ("string", "integer"):
+		try:
+			sig = found_signals_tv[sig_index] 
+		except KeyError:
+			print(" -> skipping empty signal: " + c)
+			continue
+		group = draw_signal.draw_vec(s, sig, [], end_time, vscale,
+		                                hscale, c, labels)
+	else:
+		print("unsuppoted signal type: " + sig_type)
+		continue
+	group.translate(0, v)
+	v += vscale + padding
+	allg.add(group)
 #time things
 mults = [(1000000000000000, 'fs'), 
 		 (1000000000000, 'ps'),
