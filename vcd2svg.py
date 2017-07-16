@@ -17,7 +17,6 @@ from Verilog_VCD import Verilog_VCD
 import draw_signal
 
 arguments = docopt(__doc__, version='0.1')
-print(arguments)
 fn = arguments['VCDFILE']
 data = Verilog_VCD.parse_vcd(fn)
 signals = Verilog_VCD.list_sigs(fn)
@@ -26,6 +25,7 @@ if arguments['SIGNAL'] not in ("all", "top"):
 if arguments['SIGNAL'] == "top":
 	signals = [x for x in signals if x[0] == "."]
 signals = [x[1:] if x[0]=="." else x for x in signals]
+signals_basenames = [x.split("[")[0] for x in signals]
 
 width = 1000 #px
 if arguments['--sigwidth'] is not None:
@@ -50,24 +50,61 @@ for x in data:
 	uglyname = signal['nets'][0]['hier'] + "." + name
 	if signal['nets'][0]['hier'] != "":
 		name = signal['nets'][0]['hier'] + "." + name
-	if name not in signals:
-		continue
-	print("drawing signal: " + name)
-	if ( int(signal['nets'][0]['size'])) == 1:
-		group = draw_signal.draw_bin_signal(s, signal['tv'], end_time, vscale, hscale, name, labels)
+	basename = name.split("[")[0] #senza [1:3] ad esmepio
+	reverse = False
+	try:
+		indexes = list(map(int, name.split("[")[1][:-1].split(":")))
+		if indexes[0] > indexes[1]:
+			reverse = True
+	except IndexError:
+		indexes = [0]
+	if name not in signals :
+		try:
+			#print(signals_basenames)
+			ind = signals_basenames.index(basename)
+			parts = signals[ind].split("[")
+			if len(parts) > 1:
+				indexes = map(int, parts[1][:-1].split(":"))
+				indexes = list(indexes)
+			else:
+				print("using all indexes of " + name)
+			orig_name = signals[ind]
+		except ValueError:
+			continue
 	else:
+		orig_name = name
+	if len(indexes) > 1:
+		direction = +1 if indexes[0] < indexes[1] else -1
+		rng = list(range(indexes[0], indexes[1]+direction, direction))
+	else:
+		rng = indexes
+	if reverse:
+		size = int(signal['nets'][0]['size'])
+		rng = [size-x-1 for x in rng]
+	print("drawing signal: " + name + ", with indexes "+ str(rng) )
+	try:
 		sig = signal['tv']
-		group = draw_signal.draw_vec(s, sig, end_time, vscale, hscale, name, labels)
-	group.translate(0, v)
-	v += vscale + padding
-	allg.add(group)
+	except KeyError:
+		print(" -> skipping empty signal: " + name)
+	else:
+		if len(rng) == 1:
+			group = draw_signal.draw_bin_signal(s, sig, rng[0], end_time,
+			                                    vscale, hscale, orig_name,
+			                                    labels)
+		else:
+			group = draw_signal.draw_vec(s, sig, rng, end_time, vscale,
+			                             hscale, orig_name, labels)
+		group.translate(0, v)
+		v += vscale + padding
+		allg.add(group)
 #time things
 mults = [(1000000000000000, 'fs'), 
 		 (1000000000000, 'ps'),
 		 (1000000000, 'ns'),
 		 (1000000, 'us'),
 		 (1000, 'ms'),
-		 (1, 's')]
+		 (1, 's'),
+		 (0.001, 'Ks')]
 ts = Verilog_VCD.get_timescale()
 
 suffix = ts[-2:]
@@ -82,15 +119,16 @@ else:
 
 #determine optimal time step
 timestep = 1
-ticktock = 0
+ticktocktack = 0
 #fit approx width/50 time steps
+#we like numbers of the form {2, 5, 10} * 10^x
 while (timestep * (width/50) < end_time):	
-	timestep *= 5 if ticktock == 0 else 2
-	ticktock = not ticktock
+	timestep *= 2.5 if ticktocktack == 1 else 2
+	ticktocktack = (ticktocktack + 1) % 3
 
 #find best unit for timestep
 unit = 0
-while (timestep * mult >= 1/mults[unit][0]):
+while (timestep * mult >= 1/mults[unit][0] and unit < len(mults)-1):
 	unit = unit + 1
 unit = max(unit - 1, 0)
 
@@ -127,4 +165,5 @@ tg2.translate(labels, 0)
 s.add(tg)
 s.add(tg2)
 s.add(allg)
+print("writing file...")
 s.save(arguments["OUTPUT"])

@@ -8,7 +8,7 @@ def indefinito(ran, vscale):
 		dati.append((x, rnumb))
 	return dati
 
-def draw_vec(s, sig, totl, vscale, hscale, name, labels):
+def draw_vec(s, sig, rng, totl, vscale, hscale, name, labels):
 	outer = s.g()
 	g = s.g()
 	font_size= 10
@@ -38,7 +38,8 @@ def draw_vec(s, sig, totl, vscale, hscale, name, labels):
 			fine = totl
 		center = (fine - point[0]) * hscale / 2
 		#add text with signal value
-		txt = s.text(str(point[1]), (point[0] * hscale + center, vscale/2 + font_size*.4), font_family="Roboto", font_size= font_size, text_anchor = "middle")
+		value_txt = "".join([point[1][x] for x in rng])
+		txt = s.text(value_txt, (point[0] * hscale + center, vscale/2 + font_size*.4), font_family="Roboto", font_size= font_size, text_anchor = "middle")
 		txtg.add(txt)
 		oldtime = point[0] * hscale
 		count += 1
@@ -55,15 +56,16 @@ def draw_vec(s, sig, totl, vscale, hscale, name, labels):
 	g.add(txtg)
 	return g
 
-def draw_bin_signal(s, sig, totl, vscale, hscale, name, labels):
+def draw_bin_signal(s, sig, ind, totl, vscale, hscale, name, labels):
 	g = s.g()
 	font_size= 10
-	
 	#normalize data points in 1:0 for drawing purposes
-	punti = [float(x[1]) for x in sig]
+	punti = [float(x[1][ind]) for x in sig]
 	sigmin = min(punti)
 	punti = [x - sigmin for x in punti]
 	sigmax = max(punti)
+	if sigmax == 0:
+		sigmax = 1 #hack
 	punti = [(1 - (x / sigmax)) * vscale for x in punti]
 	
 	oldv = 0
