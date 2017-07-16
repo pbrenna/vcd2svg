@@ -21,11 +21,10 @@ fn = arguments['VCDFILE']
 data = Verilog_VCD.parse_vcd(fn)
 signals = Verilog_VCD.list_sigs(fn)
 if arguments['SIGNAL'] not in ("all", "top"):
-	signals = arguments['SIGNALS'] + [arguments['SIGNAL']]
+	signals = [arguments['SIGNAL']] + arguments['SIGNALS']
 if arguments['SIGNAL'] == "top":
 	signals = [x for x in signals if x[0] == "."]
 signals = [x[1:] if x[0]=="." else x for x in signals]
-signals_basenames = [x.split("[")[0] for x in signals]
 
 width = 1000 #px
 if arguments['--sigwidth'] is not None:
@@ -44,56 +43,77 @@ s = svgwrite.Drawing(arguments["OUTPUT"],
                      str(tot_height) +"px"))
 v = padding * 2 - 0.5 # margine superiore
 allg = s.g()
+found_signals = []
+found_signals_ugly = []
+found_signals_basenames = []
+found_signals_tv = []
 for x in data:
-	signal = data[x]
-	name = signal['nets'][0]['name']
-	uglyname = signal['nets'][0]['hier'] + "." + name
-	if signal['nets'][0]['hier'] != "":
-		name = signal['nets'][0]['hier'] + "." + name
-	basename = name.split("[")[0] #senza [1:3] ad esmepio
+	try:
+		found_signals_tv.append(data[x]['tv'])
+		sig_name = data[x]['nets'][0]['name']
+		found_signals.append(sig_name)
+		sig_ugly = data[x]['nets'][0]['hier'] + "." + sig_name
+		if sig_ugly[0] != ".":
+			sig_ugly = "." + sig_ugly
+		found_signals_ugly.append(sig_ugly)
+		found_signals_basenames.append(sig_ugly.split("[")[0])
+	except KeyError:
+		pass
+	
+for c in signals: #segnali richiesti
+	c_ugly = "." + c
+	c_parts = c_ugly.split("[")
+	c_bname = c_parts[0]
+	#signal = data[x]
+	#name = signal['nets'][0]['name']
+	#uglyname = signal['nets'][0]['hier'] + "." + name
+	#if signal['nets'][0]['hier'] != "":
+	#	name = signal['nets'][0]['hier'] + "." + name
+	#basename = name.split("[")[0] #senza [1:3] ad esmepio
 	reverse = False
 	try:
-		indexes = list(map(int, name.split("[")[1][:-1].split(":")))
+		sig_index = found_signals_basenames.index(c_bname)
+	except ValueError:
+		print("not found: " + c_bname + " in " + str(found_signals_basenames))
+		continue
+	sig_ugly = found_signals_ugly[sig_index]
+	
+	try:
+		#default: use all indexes in signal
+		indexes = list(map(int, sig_ugly.split("[")[1][:-1].split(":")))
 		if indexes[0] > indexes[1]:
 			reverse = True
 	except IndexError:
+		#single signal
 		indexes = [0]
-	if name not in signals :
-		try:
-			#print(signals_basenames)
-			ind = signals_basenames.index(basename)
-			parts = signals[ind].split("[")
-			if len(parts) > 1:
-				indexes = map(int, parts[1][:-1].split(":"))
-				indexes = list(indexes)
-			else:
-				print("using all indexes of " + name)
-			orig_name = signals[ind]
-		except ValueError:
-			continue
-	else:
-		orig_name = name
+	size = max(indexes) + 1
+	if len(c_parts) > 1:
+		#read requested signals
+		indexes = map(int, c_parts[1][:-1].split(":"))
+		indexes = list(indexes)
+	elif len(indexes) > 1: 
+		c += "["+ ":".join(map(str,indexes)) +"]"
+	
 	if len(indexes) > 1:
 		direction = +1 if indexes[0] < indexes[1] else -1
 		rng = list(range(indexes[0], indexes[1]+direction, direction))
 	else:
 		rng = indexes
 	if reverse:
-		size = int(signal['nets'][0]['size'])
 		rng = [size-x-1 for x in rng]
-	print("drawing signal: " + name + ", with indexes "+ str(rng) )
+	print("drawing signal: " + c + ", with indexes "+ str(rng) )
 	try:
-		sig = signal['tv']
+		sig = found_signals_tv[sig_index] 
 	except KeyError:
-		print(" -> skipping empty signal: " + name)
+		print(" -> skipping empty signal: " + c)
 	else:
 		if len(rng) == 1:
 			group = draw_signal.draw_bin_signal(s, sig, rng[0], end_time,
-			                                    vscale, hscale, orig_name,
+			                                    vscale, hscale, c,
 			                                    labels)
 		else:
 			group = draw_signal.draw_vec(s, sig, rng, end_time, vscale,
-			                             hscale, orig_name, labels)
+			                             hscale, c, labels)
 		group.translate(0, v)
 		v += vscale + padding
 		allg.add(group)
