@@ -16,7 +16,7 @@ def draw_vec(s, sig, rng, totl, vscale, hscale, name, labels):
 	if sig[0][0] != 0:
 		sig = [(0, 'undefined sig.')] + sig
 	count = 0
-	inc = 5
+	inc = 3
 	pathd = ""
 	oldtime = 0
 	txtg = s.g()
